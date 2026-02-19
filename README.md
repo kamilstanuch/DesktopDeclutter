@@ -1,68 +1,106 @@
-# MacOS Desktop Declutter
+# DesktopDeclutter for macOS
 
-A macOS app to help declutter your desktop. Review files quickly with a swipe-based interface, get smart suggestions for related files, and organize your desktop efficiently.
-
-Built with SwiftUI using Cursor and Composer-1. May have bugs - feel free to improve or modify as needed.
+A SwiftUI macOS app for reviewing and organizing messy folders quickly with swipe actions, bulk operations, smart grouping suggestions, and cloud/local move flows.
 
 ![Desktop Declutter Demo](desktopdeclutter.gif)
 
+## What is new in this version
+
+The app has moved well beyond "Desktop-only swipe to trash/keep":
+
+- Scan any folder (not just Desktop) via folder picker
+- Navigate into subfolders with breadcrumbs and back navigation
+- Two review modes: Swipe/Card mode for one-by-one decisions, and Gallery mode for multi-select bulk actions
+- Move files to local folders or cloud destinations (iCloud / Google Drive / CloudStorage)
+- Session history timeline with undo/redo logs
+- Group review for related files with smart bulk actions
+- Stacked files and binned-file review panels
+- File type filtering and improved toolbar/action dock workflow
+- Menu bar extra for quick window access
+
 ## Features
 
-### Core
-- Swipe-based file review (left to bin, right to keep)
-- Smart suggestions that detect:
-  - 📋 Duplicate files (same name and size)
-  - 🔤 Files with similar names (e.g., screenshots with timestamps)
-  - 📅 Old files (older than 1 year)
-  - 💾 Large files (over 50MB)
-  - 🕐 Files from the same session (created within same time period)
-  - 🗑️ Temporary files (common temp file patterns)
-- Group review mode - review related files together with smart actions
-- Quick Look preview (in-app, doesn't open Finder)
-- Stack files for later review
-- Review binned files before final deletion (when immediate binning is off)
-- Undo/redo support
-- File type filtering (images, videos, documents, etc.)
-- Progress tracking and statistics
+### Review workflows
 
-### UI/UX
-- Material blur effects
-- Thumbnail generation for images/documents
-- Keyboard shortcuts for all actions
-- Resizable window
-- Settings to toggle immediate vs delayed binning
+- Swipe/Card review with `Right Arrow` (keep), `Left Arrow` (bin), `S` (stack), and `F` (next)
+- Gallery review with multi-select and bulk keep/bin/cloud/move actions
 
-## How It Works
+### Smart suggestions
 
-1. Launch the app - scans your Desktop folder
-2. Review files one by one:
-   - Swipe right or press `→` to keep
-   - Swipe left or press `←` to bin
-   - Press `S` to stack for later
-   - Press `Spacebar` to preview
-3. When you see suggestion badges, tap them to review related files together
-4. In group review, use smart action cards or manually select files
-5. Review stacked/binned files before final deletion
+Suggestions are detected per file and can launch grouped review:
 
-## Keyboard Shortcuts
+- Duplicates (same file name and size)
+- Similar naming groups (CleanShot/screenshot/versioned/dated patterns)
+- Old files (over 1 year old, higher signal for 2+ years)
+- Large files (100MB+; higher priority at 500MB+)
+- Same-session files (created within a 5-minute window)
+- Temporary file patterns (`tmp`, `cache`, `log`, `bak`, `old`, etc.)
+
+### Group review and smart actions
+
+- Open grouped files from suggestion badges
+- Preview the group with Quick Look
+- Use generated smart action cards (for supported suggestion types), including: keep newest and bin the rest (duplicates), keep newest N files (similar-name groups), and bin files older than 1 week (similar-name groups)
+
+### Organization and movement
+
+- Move to any local destination folder
+- Move to configured cloud destinations
+- Cloud destination management in Settings: add/remove destinations and set the active one
+- Provider detection for iCloud Drive / Google Drive / CloudStorage
+- Files moved to cloud are organized under `DesktopDeclutter/<source-folder>/...`
+
+### Session controls
+
+- Undo/redo with history stack
+- Session history popover with action timeline
+- Reset session (undo all actions)
+- Trash modes: immediate trash or delayed trash review (binned queue)
+- Stack queue for deferred review
+
+### UI and macOS integration
+
+- Material/blur desktop-native UI
+- Quick Look preview integration (with Finder fallback)
+- Sidebar with file list, current selection, and inline undo
+- Welcome overlay animation on launch/refocus
+- Menu bar item with Show Window and Quit actions
+
+## Keyboard shortcuts
 
 | Key | Action |
-|-----|--------|
-| `→` | Keep current file |
+|---|---|
 | `←` | Bin current file |
+| `→` | Keep current file |
 | `S` | Stack current file |
-| `Spacebar` | Preview file |
-| `⌘Z` | Undo last action |
-| `ESC` | Close Quick Look |
+| `F` | Go to next file |
+| `Space` | Preview current file (Quick Look) |
+| `C` | Move current file to cloud |
+| `M` | Move current file to folder |
+| `Return` | Enter folder (when current item is a folder) |
+| `⌘Z` | Undo |
+| `⌘⇧Z` | Redo |
+| `Esc` | Close Quick Look panel |
+| `⌘W` | Show app window (menu bar action) |
+| `⌘Q` | Quit app |
+
+## How to use
+
+1. Launch the app and choose a folder to scan.
+2. Review items in Swipe mode or switch to Gallery mode.
+3. Use suggestion badges to review related files in groups.
+4. Move, keep, stack, or bin files.
+5. Review stacked/binned queues before final trashing (if delayed binning is enabled).
 
 ## Installation
 
 ### Requirements
-- macOS 13.0+ (Ventura or later)
+
+- macOS 13.0+ (Ventura or newer)
 - Swift 5.9+
 - Xcode Command Line Tools
 
-### Build
+### Build and run
 
 ```bash
 git clone https://github.com/yourusername/DesktopDeclutter.git
@@ -71,54 +109,31 @@ swift build
 swift run
 ```
 
-### Permissions
+## Settings
 
-On first launch, grant **Full Disk Access** in System Settings:
-- System Settings → Privacy & Security → Full Disk Access
-- Add Desktop Declutter
-- Restart the app
+- `Trash Immediately`: bin actions go directly to Trash
+- `Change Scan Folder...`: choose a different folder to review
+- `Cloud Destinations`: connect cloud folders for cloud moves
 
-## Usage
+## Technical notes
 
-### Basic Flow
-- Files appear as cards - swipe or use keyboard shortcuts
-- Preview files with spacebar (Quick Look opens in-app)
-- Tap suggestion badges to review related files together
-- Use smart action cards in group review for quick decisions
-- Review stacked/binned files before final deletion
+- Built with SwiftUI + AppKit integrations
+- Uses `QuickLookUI` and `QuickLookThumbnailing`
+- Uses security-scoped bookmarks for user-chosen cloud folders
+- No third-party package dependencies
 
-### Settings
-- Toggle "Trash Immediately" - when OFF, files are collected for review before deletion
+## Current limitations
 
-## Technical Details
-
-- Built with SwiftUI
-- Uses QuickLookThumbnailing for thumbnails
-- Uses QuickLookUI for in-app preview
-- Swift Package Manager for dependencies
-- No external dependencies (pure Swift/macOS)
-
-## Known Issues / Limitations
-
-- May have bugs - this was built with AI assistance (Cursor/Composer-1)
-- Thumbnail generation can be slow for many files
-- Quick Look preview might not work perfectly in all scenarios
-- Performance may degrade with very large desktop collections (100+ files)
+- Duplicate detection is heuristic-based (name + size), not content hashing
+- Suggestion matching is intentionally bounded for responsiveness on large folders
+- As with any file-management app, review actions carefully before bulk bin/move operations
 
 ## Contributing
 
-Feel free to:
-- Report bugs
-- Suggest improvements
-- Submit pull requests
-- Fork and modify for your needs
-
-This is an open project - contributions welcome.
+Issues and pull requests are welcome.
 
 ## License
 
-MIT License
+MIT License. See `LICENSE.md`.
 
----
-
-Built with Cursor and Composer-1. Use at your own risk.
+You can use, modify, and distribute this project freely under the MIT terms.
