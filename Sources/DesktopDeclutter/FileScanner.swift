@@ -82,21 +82,20 @@ class FileScanner {
     private let fileManager = FileManager.default
     
     func scanDesktop() throws -> [DesktopFile] {
-        guard let desktopURL = fileManager.urls(for: .desktopDirectory, in: .userDomainMask).first else {
-            throw NSError(domain: "DesktopDeclutter", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not find Desktop directory."])
-        }
-        
-         if !fileManager.isReadableFile(atPath: desktopURL.path) {
-             throw NSError(domain: "DesktopDeclutter", code: 2, userInfo: [NSLocalizedDescriptionKey: "Access to Desktop denied. Please grant permission in System Settings."])
-        }
-        
-        let fileURLs = try fileManager.contentsOfDirectory(at: desktopURL, includingPropertiesForKeys: [.fileSizeKey])
-        
+        try scanFolder(FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0])
+    }
+
+    func scanFolder(_ folder: URL) throws -> [DesktopFile] {
+        let fileURLs = try fileManager.contentsOfDirectory(at: folder,
+            includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey],
+            options: [.skipsHiddenFiles])
+
         var files: [DesktopFile] = []
         
         for url in fileURLs {
             let filename = url.lastPathComponent
-            if !filename.hasPrefix(".") && !filename.hasPrefix("$") {
+            let flags = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            if flags?.isRegularFile == true && flags?.isSymbolicLink != true && !filename.hasPrefix("$") {
                 
                 // Get File Size
                 let resources = try? url.resourceValues(forKeys: [.fileSizeKey])
@@ -109,9 +108,9 @@ class FileScanner {
     }
     
     // Async thumbnail generation
-    func generateThumbnail(for file: DesktopFile, completion: @escaping (NSImage?) -> Void) {
-        let size = CGSize(width: 300, height: 300)
-        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+    func generateThumbnail(for file: DesktopFile, maxDimension: CGFloat = 1400, completion: @escaping (NSImage?) -> Void) {
+        let size = CGSize(width: maxDimension, height: maxDimension)
+        let scale: CGFloat = 1.0
         
         let request = QLThumbnailGenerator.Request(fileAt: file.url, size: size, scale: scale, representationTypes: .thumbnail)
         

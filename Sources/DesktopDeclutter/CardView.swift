@@ -1,6 +1,8 @@
 import SwiftUI
+import QuickLookUI
 
 struct CardView: View {
+    let cardSize: CGSize
     let file: DesktopFile
     let suggestions: [FileSuggestion]
     let onKeep: () -> Void
@@ -12,7 +14,8 @@ struct CardView: View {
     @State private var color: Color = .clear
     @State private var showSuggestions = false
     
-    init(file: DesktopFile, suggestions: [FileSuggestion] = [], onKeep: @escaping () -> Void, onBin: @escaping () -> Void, onPreview: (() -> Void)? = nil, onSuggestionTap: ((FileSuggestion) -> Void)? = nil) {
+    init(file: DesktopFile, cardSize: CGSize = CGSize(width: 300, height: 450), suggestions: [FileSuggestion] = [], onKeep: @escaping () -> Void, onBin: @escaping () -> Void, onPreview: (() -> Void)? = nil, onSuggestionTap: ((FileSuggestion) -> Void)? = nil) {
+        self.cardSize = cardSize
         self.file = file
         self.suggestions = suggestions
         self.onKeep = onKeep
@@ -45,22 +48,16 @@ struct CardView: View {
                 ZStack {
                     Color(nsColor: .controlBackgroundColor)
                     
-                    Group {
-                        if let thumbnail = file.thumbnail {
-                            Image(nsImage: thumbnail)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                        } else {
-                            Image(nsImage: file.icon)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 120, height: 120)
-                                .foregroundColor(.secondary)
+                    if let image = file.thumbnail {
+                        Image(nsImage: image).resizable().aspectRatio(contentMode: .fit).padding(8)
+                    } else {
+                        VStack(spacing: 12) {
+                            Image(systemName: "doc").font(.system(size: 48))
+                            Text("Loading preview… · Space to open")
                         }
                     }
-                    .padding(20)
                 }
-                .frame(height: 320)
+                .frame(height: max(240, cardSize.height - (suggestions.isEmpty ? 100 : 170)))
                 .clipShape(
                     UnevenRoundedRectangle(
                         topLeadingRadius: 20,
@@ -216,7 +213,7 @@ struct CardView: View {
             }
             .allowsHitTesting(false)
         }
-        .frame(width: 300, height: suggestions.isEmpty ? 400 : 450)
+        .frame(width: cardSize.width, height: cardSize.height)
         .offset(x: offset.width, y: 0)
         .rotationEffect(.degrees(Double(offset.width / 25)))
         .scaleEffect(1.0 - abs(offset.width) / 1200)

@@ -9,10 +9,10 @@ struct DesktopDeclutterApp: App {
         // Main window that opens automatically
         WindowGroup {
             ContentView()
-                .frame(minWidth: 420, minHeight: 680)
+                .frame(minWidth: 720, minHeight: 680)
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 420, height: 680)
+        .defaultSize(width: 1100, height: 850)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
@@ -50,8 +50,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let screen = NSScreen.main ?? NSScreen.screens.first
                 if let screen = screen {
                     let screenFrame = screen.visibleFrame
-                    let windowWidth: CGFloat = 420
-                    let windowHeight: CGFloat = 680
+                    let windowWidth: CGFloat = min(1100, screenFrame.width)
+                    let windowHeight: CGFloat = min(850, screenFrame.height)
                     let x = screenFrame.midX - windowWidth / 2
                     let y = screenFrame.midY - windowHeight / 2
                     window.setFrame(NSRect(x: x, y: y, width: windowWidth, height: windowHeight), display: true)
