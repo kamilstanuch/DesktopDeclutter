@@ -34,7 +34,7 @@ Built with SwiftUI using Cursor and Composer-1. May have bugs - feel free to imp
 
 ## How It Works
 
-1. Launch the app - scans your Desktop folder
+1. Launch the app and click **Choose Folder** to select a folder. Only regular files directly inside it are reviewed; hidden files, symbolic links, and subfolders are skipped.
 2. Review files one by one:
    - Swipe right or press `→` to keep
    - Swipe left or press `←` to bin
@@ -52,7 +52,7 @@ Built with SwiftUI using Cursor and Composer-1. May have bugs - feel free to imp
 | `←` | Bin current file |
 | `S` | Stack current file |
 | `Spacebar` | Preview file |
-| `⌘Z` | Undo last action |
+| `↑` or `⌘Z` | Undo last action |
 | `ESC` | Close Quick Look |
 
 ## Installation
@@ -88,7 +88,8 @@ On first launch, grant **Full Disk Access** in System Settings:
 - Review stacked/binned files before final deletion
 
 ### Settings
-- Toggle "Trash Immediately" - when OFF, files are collected for review before deletion
+- "Trash Immediately" defaults to OFF: files are collected for review before deletion.
+- Resize the window to enlarge the card preview; press Space to inspect the full document.
 
 ## Technical Details
 

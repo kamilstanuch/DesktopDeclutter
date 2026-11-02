@@ -4,15 +4,21 @@ import QuickLookUI
 struct ContentView: View {
     @StateObject private var viewModel = DeclutterViewModel()
     
+    @State private var keyboardMonitor: Any? = nil
     @State private var showSettings = false
     @State private var showStackedFiles = false
     @State private var showBinnedFiles = false
     @State private var showFilters = false
     
     var body: some View {
+        GeometryReader { geometry in
         VStack(spacing: 0) {
             // Unified Toolbar with Material Effect
             HStack(spacing: 12) {
+                Button(action: { viewModel.chooseFolder() }) {
+                    Label("Choose Folder", systemImage: "folder")
+                }
+                .help(viewModel.selectedFolder?.path ?? "Choose a folder to review")
                 // Undo button (only visible when undo is available)
                 if viewModel.canUndo {
                     Button(action: {
@@ -28,7 +34,7 @@ struct ContentView: View {
                             }
                     }
                     .buttonStyle(.plain)
-                    .help("Undo last action (⌘Z)")
+                    .help("Undo last action (↑ or ⌘Z)")
                 }
                 
                 // Settings button
@@ -157,6 +163,10 @@ struct ContentView: View {
                 VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
             }
             
+            if let folder = viewModel.selectedFolder {
+                Text(folder.path).font(.caption).foregroundColor(.secondary)
+                    .lineLimit(1).truncationMode(.middle).padding(.horizontal).padding(.vertical, 4)
+            }
             Divider()
                 .opacity(0.2)
             
@@ -164,7 +174,14 @@ struct ContentView: View {
                 // Material background for main content
                 VisualEffectView(material: .contentBackground, blendingMode: .behindWindow)
                 
-                if let error = viewModel.errorMessage {
+                if viewModel.selectedFolder == nil {
+                    VStack(spacing: 16) {
+                        Image(systemName: "folder").font(.system(size: 60))
+                        Text("Choose a folder to start").font(.title2)
+                        Text("Review files in this folder. Subfolders are left untouched.")
+                        Button("Choose Folder…") { viewModel.chooseFolder() }
+                    }
+                } else if let error = viewModel.errorMessage {
                      VStack(spacing: 20) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.largeTitle)
@@ -197,6 +214,7 @@ struct ContentView: View {
                         if let file = viewModel.currentFile {
                             CardView(
                                 file: file,
+                                cardSize: CGSize(width: max(300, geometry.size.width - 200), height: max(400, geometry.size.height - 180)),
                                 suggestions: viewModel.currentFileSuggestions,
                                 onKeep: {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
@@ -395,7 +413,7 @@ struct ContentView: View {
                             Button(action: {
                                 viewModel.loadFiles()
                             }) {
-                                Text("Rescan Desktop")
+                                Text("Rescan Folder")
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(.secondary)
                             }
@@ -438,15 +456,32 @@ struct ContentView: View {
                 }
             }
         }
-        .frame(minWidth: 420, minHeight: 680)
+        }
+        .frame(minWidth: 720, minHeight: 680)
         .background(QuickLookResponder())
+        .task(id: viewModel.currentFile?.id) {
+            viewModel.refreshCurrentSuggestions()
+        }
         .onAppear {
             setupKeyboardShortcuts()
+        }
+        .onDisappear {
+            if let monitor = keyboardMonitor { NSEvent.removeMonitor(monitor) }
+            keyboardMonitor = nil
         }
     }
     
     private func setupKeyboardShortcuts() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        guard keyboardMonitor == nil else { return }
+        keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard let window = event.window ?? NSApp.keyWindow else { return event }
+            // Exclude actual dialogs and Quick Look, rather than every NSPanel subclass.
+            guard !(window is NSOpenPanel), !(window is NSSavePanel),
+                  !(window is QLPreviewPanel), window.attachedSheet == nil,
+                  !showSettings, !showFilters, !showBinnedFiles, !showStackedFiles,
+                  !viewModel.showGroupReview else { return event }
+            if let editor = window.firstResponder as? NSTextView, editor.isEditable { return event }
+            if event.modifierFlags.intersection([.option, .control]).isEmpty == false { return event }
             // Handle Cmd+Z for undo
             if event.modifierFlags.contains(.command) {
                 if event.keyCode == 6 { // Z key
@@ -455,10 +490,15 @@ struct ContentView: View {
                         return nil
                     }
                 }
-                return nil // Let system handle other Cmd+key shortcuts
+                return event // Let system handle other Cmd+key shortcuts
             }
             
             switch event.keyCode {
+            case 126: // Up arrow: undo the previous decision
+                if viewModel.canUndo {
+                    _ = viewModel.undoLastAction()
+                }
+                return nil
             case 123: // Left arrow
                 if !viewModel.isFinished {
                     viewModel.binCurrentFile()
@@ -1317,4 +1357,3 @@ struct GroupReviewFileCard: View {
         )
     }
 }
-

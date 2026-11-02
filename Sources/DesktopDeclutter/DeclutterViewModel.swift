@@ -15,7 +15,7 @@ class DeclutterViewModel: ObservableObject {
     @Published var totalFilesCount: Int = 0
     
     // Modes
-    @Published var immediateBinning: Bool = true
+    @Published var immediateBinning: Bool = false
     
     // Stacked files (for later review)
     @Published var stackedFiles: [DesktopFile] = []
@@ -44,29 +44,23 @@ class DeclutterViewModel: ObservableObject {
     private var suggestionTask: Task<Void, Never>? = nil
     
     var currentFile: DesktopFile? {
-        guard currentFileIndex < filteredFiles.count else { 
-            // Clear suggestions when no file
-            if !currentFileSuggestions.isEmpty {
-                currentFileSuggestions = []
-            }
-            return nil 
-        }
-        let file = filteredFiles[currentFileIndex]
-        
-        // Only update suggestions when file actually changes
-        if lastSuggestionFileId != file.id {
-            lastSuggestionFileId = file.id
-            
-            // Cancel previous suggestion task
-            suggestionTask?.cancel()
-            
-            // Start new suggestion detection
-            updateSuggestionsAsync(for: file)
-        }
-        
-        return file
+        let visible = filteredFiles
+        guard visible.indices.contains(currentFileIndex) else { return nil }
+        return visible[currentFileIndex]
     }
-    
+
+    func refreshCurrentSuggestions() {
+        guard let file = currentFile else {
+            suggestionTask?.cancel()
+            currentFileSuggestions = []
+            lastSuggestionFileId = nil
+            return
+        }
+        guard lastSuggestionFileId != file.id else { return }
+        lastSuggestionFileId = file.id
+        updateSuggestionsAsync(for: file)
+    }
+
     private func updateSuggestionsAsync(for file: DesktopFile) {
         // Check cache first
         if let cached = suggestionCache[file.id] {
@@ -100,6 +94,7 @@ class DeclutterViewModel: ObservableObject {
                 // Only update if this file is still current
                 if lastSuggestionFileId == file.id && suggestionCache[file.id] == nil {
                     currentFileSuggestions = suggestions
+                    suggestionCache.removeAll()
                     suggestionCache[file.id] = suggestions
                 }
             }
@@ -127,14 +122,37 @@ class DeclutterViewModel: ObservableObject {
     private var actionHistory: [Action] = []
     private var maxHistorySize = 50
     
-    init() {
+    @Published var selectedFolder: URL? = nil
+
+    func chooseFolder() {
+        if !binnedFiles.isEmpty || !stackedFiles.isEmpty {
+            let alert = NSAlert()
+            alert.messageText = "Switch folders?"
+            alert.informativeText = "Pending deletion and later-review decisions will be cleared. No files will be deleted."
+            alert.addButton(withTitle: "Switch Folder")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Review Folder"
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        selectedFolder = folder
         loadFiles()
     }
-    
+
     func loadFiles() {
         self.errorMessage = nil
         do {
-            let loadedFiles = try FileScanner.shared.scanDesktop()
+            guard let folder = selectedFolder else { return }
+            let loadedFiles = try FileScanner.shared.scanFolder(folder)
+            actionHistory.removeAll()
+            suggestionTask?.cancel()
+            showGroupReview = false
+            groupReviewFiles = []
+            groupReviewSuggestion = nil
             self.files = loadedFiles
             self.currentFileIndex = 0
             self.binnedFiles = []
@@ -167,37 +185,31 @@ class DeclutterViewModel: ObservableObject {
     private var thumbnailGenerationInProgress = Set<UUID>()
     
     func generateThumbnails(for index: Int) {
-        // Preload thumbnails for current and next 2 files only (limit concurrent generation)
-        let filesToProcess = filteredFiles
-        let range = index..<min(index + 2, filesToProcess.count) // Reduced from 3 to 2
-        
-        for i in range {
-            let file = filesToProcess[i]
-            
-            // Skip if already generating or already has thumbnail
-            guard !thumbnailGenerationInProgress.contains(file.id),
-                  let fileIndex = files.firstIndex(where: { $0.id == file.id }),
-                  files[fileIndex].thumbnail == nil else {
-                continue
-            }
-            
-            // Mark as in progress
+        let visible = filteredFiles
+        guard visible.indices.contains(index) else { return }
+        let nearby = Array(visible[index..<min(index + 2, visible.count)])
+        let retained = Set(nearby.map(\.id))
+        for i in files.indices where files[i].thumbnail != nil && !retained.contains(files[i].id) {
+            files[i].thumbnail = nil
+        }
+        for file in nearby {
+            guard file.thumbnail == nil, !thumbnailGenerationInProgress.contains(file.id) else { continue }
             thumbnailGenerationInProgress.insert(file.id)
-            
             FileScanner.shared.generateThumbnail(for: file) { [weak self] image in
-                guard let self = self else { return }
-                
-                // Update on main thread
                 Task { @MainActor in
-                    if fileIndex < self.files.count {
-                        self.files[fileIndex].thumbnail = image
-                    }
+                    guard let self = self else { return }
                     self.thumbnailGenerationInProgress.remove(file.id)
+                    let visible = self.filteredFiles
+                    let start = min(max(0, self.currentFileIndex), visible.count)
+                    let wanted = visible[start..<min(start + 2, visible.count)].contains { $0.id == file.id }
+                    if wanted, let position = self.files.firstIndex(where: { $0.id == file.id }) {
+                        self.files[position].thumbnail = image
+                    }
                 }
             }
         }
     }
-    
+
     // Note: currentFile and isFinished are now computed properties above
     
     func keepCurrentFile() {
@@ -243,7 +255,7 @@ class DeclutterViewModel: ObservableObject {
             }
         } else {
             // Collect for later review
-        binnedFiles.append(file)
+        binnedFiles.append(withoutThumbnail(file))
             binnedCount += 1
         reclaimedSpace += file.fileSize
         }
@@ -263,14 +275,20 @@ class DeclutterViewModel: ObservableObject {
         // Remove from files array
         files.removeAll { $0.id == file.id }
         
-        stackedFiles.append(file)
+        stackedFiles.append(withoutThumbnail(file))
         moveToNext()
     }
     
+    private func withoutThumbnail(_ file: DesktopFile) -> DesktopFile {
+        var result = file
+        result.thumbnail = nil
+        return result
+    }
+
     private func recordAction(_ type: Action.ActionType, file: DesktopFile, originalIndex: Int?) {
         let action = Action(
             type: type,
-            file: file,
+            file: withoutThumbnail(file),
             previousIndex: currentFileIndex,
             fileOriginalIndex: originalIndex
         )
@@ -360,20 +378,11 @@ class DeclutterViewModel: ObservableObject {
     }
     
     private func moveToNext() {
-        withAnimation {
-            // Don't increment if we're already at the end
-            if currentFileIndex < filteredFiles.count {
-            currentFileIndex += 1
-            }
-            // If we've gone past the end, clamp to the end
-            if currentFileIndex >= filteredFiles.count {
-                currentFileIndex = filteredFiles.count
-            }
-        }
-        // Preload more as we move
+        // Decisions remove the current file, so its successor occupies the same index.
+        currentFileIndex = min(max(0, currentFileIndex), filteredFiles.count)
         generateThumbnails(for: currentFileIndex)
     }
-    
+
     func emptyBin() {
         for file in binnedFiles {
             do {
@@ -476,7 +485,7 @@ class DeclutterViewModel: ObservableObject {
             // Mark as in progress
             thumbnailGenerationInProgress.insert(file.id)
             
-            FileScanner.shared.generateThumbnail(for: file) { [weak self] image in
+            FileScanner.shared.generateThumbnail(for: file, maxDimension: 320) { [weak self] image in
                 guard let self = self else { return }
                 
                 // Update on main thread
@@ -640,7 +649,7 @@ class DeclutterViewModel: ObservableObject {
                         reclaimedSpace += file.fileSize
                     }
                 } else {
-                    binnedFiles.append(file)
+                    binnedFiles.append(withoutThumbnail(file))
                     binnedCount += 1
                     reclaimedSpace += file.fileSize
                 }
